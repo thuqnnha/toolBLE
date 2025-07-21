@@ -1,0 +1,19 @@
+<!-- res/layout/exit_layout.xml -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/exit_root"
+    android:layout_width="100dp"
+    android:layout_height="100dp"
+    android:layout_gravity="bottom|center_horizontal"
+    android:background="@drawable/exit_background"
+    android:visibility="gone">
+
+    <ImageView
+        android:id="@+id/exit_icon"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="center"
+        android:src="@drawable/ic_close"
+        android:scaleType="centerInside"
+        app:tint="#FF5252" />
+</FrameLayout>

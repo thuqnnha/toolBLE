@@ -1,0 +1,18 @@
+<!-- res/drawable/exit_background.xml -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+
+    <!-- Màu đen trong suốt 40% -->
+    <solid android:color="#66000000" /> <!-- #66 = alpha khoảng 40% -->
+
+    <!-- Giữ kích thước nền -->
+    <size android:width="80dp" android:height="80dp" />
+
+    <!-- Bán kính bo tròn -->
+    <corners android:radius="40dp" />
+
+    <!-- Viền trắng nhẹ -->
+    <stroke
+        android:width="2dp"
+        android:color="#CCFFFFFF" /> <!-- Viền trắng mờ -->
+</shape>
