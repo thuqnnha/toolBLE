@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
@@ -26,6 +27,15 @@ public class BleManager {
     private BluetoothLeScanner bluetoothLeScanner;
     private BluetoothGatt bluetoothGatt;
     private BluetoothGattCharacteristic writeCharacteristic;
+    private BleConnectionListener connectionListener;
+    public interface BleConnectionListener {
+        void onConnected();
+        void onDisconnected();
+        void onConnectionFailed();
+    }
+    public void setConnectionListener(BleConnectionListener listener) {
+        this.connectionListener = listener;
+    }
 
     public BleManager(Context context) {
         this.context = context;
@@ -81,11 +91,15 @@ public class BleManager {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             Log.d(TAG, "onConnectionStateChange: status=" + status + ", newState=" + newState);
-            if (newState == android.bluetooth.BluetoothProfile.STATE_CONNECTED) {
+            if (newState == BluetoothProfile.STATE_CONNECTED) {
                 Log.d(TAG, "Connected. Discovering services...");
                 bluetoothGatt.discoverServices();
-            } else if (newState == android.bluetooth.BluetoothProfile.STATE_DISCONNECTED) {
+                if (connectionListener != null) connectionListener.onConnected();
+            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 Log.d(TAG, "Disconnected from GATT server");
+                if (connectionListener != null) connectionListener.onDisconnected();
+            } else if (status != BluetoothGatt.GATT_SUCCESS) {
+                if (connectionListener != null) connectionListener.onConnectionFailed();
             }
         }
 

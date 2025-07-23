@@ -9,6 +9,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.graphics.PixelFormat;
 import android.location.Location;
 import android.location.LocationListener;
@@ -47,7 +48,10 @@ public class FloatingBubbleService extends Service {
     ExecutorService bluetoothExecutor = Executors.newSingleThreadExecutor();
     ExecutorService settingExecutor = Executors.newSingleThreadExecutor();
     private BleManager bleManager;
-
+    private SharedPreferences sharedPreferences;
+    private static final String PREF_NAME = "ToolDriverPrefs";
+    private static final String KEY_LAST_MESSAGE = "lastMessage";
+    private String lastMessageToSend = "Hello"; // mặc định
     @Override
     public void onCreate() {
         super.onCreate();
@@ -130,10 +134,34 @@ public class FloatingBubbleService extends Service {
         setupButtons();
         requestLocationUpdates();
 
+        sharedPreferences = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+        lastMessageToSend = sharedPreferences.getString(KEY_LAST_MESSAGE, "Hello");
     }
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         bleManager = new BleManager(this);
+        bleManager.setConnectionListener(new BleManager.BleConnectionListener() {
+            @Override
+            public void onConnected() {
+                new Handler(Looper.getMainLooper()).post(() ->
+                        showCustomToast("Đã kết nối Bluetooth")
+                );
+            }
+
+            @Override
+            public void onDisconnected() {
+                new Handler(Looper.getMainLooper()).post(() ->
+                        showCustomToast("Bluetooth đã ngắt kết nối")
+                );
+            }
+
+            @Override
+            public void onConnectionFailed() {
+                new Handler(Looper.getMainLooper()).post(() ->
+                        showCustomToast("Không thể kết nối Bluetooth")
+                );
+            }
+        });
         bleManager.startScan();
 
         return START_STICKY;
@@ -217,18 +245,17 @@ public class FloatingBubbleService extends Service {
 
         btn_bluetooth.setOnClickListener(v -> {
             bluetoothExecutor.execute(() -> {
-//                TODO: Xử lí nặng
                 if (bleManager != null && bleManager.isConnected()) {
-                    bleManager.sendData("Hello");
+                    boolean ok = bleManager.sendData(lastMessageToSend);
+                    new Handler(Looper.getMainLooper()).post(() ->
+                            showCustomToast(ok ? "Đã gửi: " + lastMessageToSend : "Lỗi khi gửi")
+                    );
                 } else {
-                    Log.d("BLE", "Chưa kết nối thiết bị");
+                    new Handler(Looper.getMainLooper()).post(() ->
+                            showCustomToast("Chưa kết nối Bluetooth")
+                    );
                 }
-//                showNotification("Bluetooth", "Bluetooth action performed");
-//                new Handler(Looper.getMainLooper()).post(() ->
-//                        showCustomToast("Bluetooth action")
-//                );
             });
-
         });
 
         btn_settings.setOnClickListener(v -> {
@@ -240,6 +267,10 @@ public class FloatingBubbleService extends Service {
                         showCustomToast("Settings action")
                 );
             });
+        });
+        btn_bluetooth.setOnLongClickListener(v -> {
+            showInputDialog();  // gọi hàm nhập tin nhắn
+            return true;
         });
 
     }
@@ -357,6 +388,34 @@ public class FloatingBubbleService extends Service {
             }
         }, 2000);
     }
+    private void showInputDialog() {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(getApplicationContext());
+            builder.setTitle("Nhập nội dung gửi");
+
+            final android.widget.EditText input = new android.widget.EditText(getApplicationContext());
+            input.setText(lastMessageToSend);
+            input.setTextColor(android.graphics.Color.BLACK); // tránh chữ trắng
+
+            builder.setView(input);
+
+            builder.setPositiveButton("OK", (dialog, which) -> {
+                lastMessageToSend = input.getText().toString();
+                // Lưu vào SharedPreferences
+                sharedPreferences.edit().putString(KEY_LAST_MESSAGE, lastMessageToSend).apply();
+                showCustomToast("Đã lưu: " + lastMessageToSend);
+            });
+
+            builder.setNegativeButton("Hủy", (dialog, which) -> dialog.cancel());
+
+            android.app.AlertDialog dialog = builder.create();
+            dialog.getWindow().setType((Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    : WindowManager.LayoutParams.TYPE_PHONE);
+            dialog.show();
+        });
+    }
+
 
     @Override
     public void onDestroy() {
