@@ -19,6 +19,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.util.Log;
 import android.view.*;
 import android.widget.ImageButton;
 import android.widget.TextView;
@@ -45,9 +46,25 @@ public class FloatingBubbleService extends Service {
     private View toastView;
     ExecutorService bluetoothExecutor = Executors.newSingleThreadExecutor();
     ExecutorService settingExecutor = Executors.newSingleThreadExecutor();
+    private BleManager bleManager;
+
     @Override
     public void onCreate() {
         super.onCreate();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel("tool_driver_channel",
+                    "ToolDriver", NotificationManager.IMPORTANCE_LOW);
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            manager.createNotificationChannel(channel);
+
+            Notification notification = new Notification.Builder(this, "tool_driver_channel")
+                    .setContentTitle("ToolDriver đang chạy")
+                    .setSmallIcon(R.drawable.ic_bluetooth)
+                    .build();
+
+            startForeground(1, notification);
+        }
+
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         //giữ màn hình sáng
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
@@ -113,6 +130,13 @@ public class FloatingBubbleService extends Service {
         setupButtons();
         requestLocationUpdates();
 
+    }
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        bleManager = new BleManager(this);
+        bleManager.startScan();
+
+        return START_STICKY;
     }
     @SuppressLint("MissingPermission")
     private void requestLocationUpdates() {
@@ -194,12 +218,15 @@ public class FloatingBubbleService extends Service {
         btn_bluetooth.setOnClickListener(v -> {
             bluetoothExecutor.execute(() -> {
 //                TODO: Xử lí nặng
-//                android.util.Log.d("Bluetooth", "Thực hiện hành động Bluetooth");
-
+                if (bleManager != null && bleManager.isConnected()) {
+                    bleManager.sendData("Hello");
+                } else {
+                    Log.d("BLE", "Chưa kết nối thiết bị");
+                }
 //                showNotification("Bluetooth", "Bluetooth action performed");
-                new Handler(Looper.getMainLooper()).post(() ->
-                        showCustomToast("Bluetooth action")
-                );
+//                new Handler(Looper.getMainLooper()).post(() ->
+//                        showCustomToast("Bluetooth action")
+//                );
             });
 
         });
@@ -341,6 +368,7 @@ public class FloatingBubbleService extends Service {
         if (screenReceiver != null) {
             unregisterReceiver(screenReceiver);
         }
+        if (bleManager != null) bleManager.disconnect();
     }
 
     @Override
@@ -348,5 +376,4 @@ public class FloatingBubbleService extends Service {
         return null;
     }
 }
-
 
