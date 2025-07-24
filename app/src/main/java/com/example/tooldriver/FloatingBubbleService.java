@@ -1,5 +1,6 @@
 package com.example.tooldriver;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -10,6 +11,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.PixelFormat;
 import android.location.Location;
 import android.location.LocationListener;
@@ -20,11 +22,17 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
+import android.speech.tts.TextToSpeech;
 import android.util.Log;
 import android.view.*;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.core.content.ContextCompat;
 
 import org.json.JSONObject;
 
@@ -32,6 +40,8 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -52,6 +62,9 @@ public class FloatingBubbleService extends Service {
     private static final String PREF_NAME = "ToolDriverPrefs";
     private static final String KEY_LAST_MESSAGE = "lastMessage";
     private String lastMessageToSend = "Hello"; // mặc định
+    private SpeechRecognizerManager speechRecognizerManager;
+    private TextSpeaker textSpeaker;
+    private boolean waitingForCommand = false;
     @Override
     public void onCreate() {
         super.onCreate();
@@ -136,16 +149,81 @@ public class FloatingBubbleService extends Service {
 
         sharedPreferences = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
         lastMessageToSend = sharedPreferences.getString(KEY_LAST_MESSAGE, "Hello");
+
+        //
+        textSpeaker = new TextSpeaker(getApplicationContext());
     }
+    private Handler voiceHandler = new Handler(Looper.getMainLooper());
+    private Runnable resumeListeningRunnable;
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         bleManager = new BleManager(this);
         bleManager.setConnectionListener(new BleManager.BleConnectionListener() {
             @Override
             public void onConnected() {
-                new Handler(Looper.getMainLooper()).post(() ->
-                        showCustomToast("Đã kết nối Bluetooth")
-                );
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    showCustomToast("Đã kết nối Bluetooth");
+
+                    if (speechRecognizerManager == null) {
+                        speechRecognizerManager = new SpeechRecognizerManager(getApplicationContext(), new SpeechRecognizerManager.OnSpeechResultListener() {
+                            @Override
+                            public void onResult(String text) {
+                                showCustomToast("Bạn nói: " + text);
+
+                                if (text.toLowerCase().contains("ê cu") && !waitingForCommand) {
+                                    waitingForCommand = true;
+
+                                    speechRecognizerManager.setAutoRestart(false); // Tạm thời không restart
+                                    speechRecognizerManager.stopListening();
+
+                                    textSpeaker.speak("Anh Lâm đẹp zai cần gửi gì nữa");
+
+                                    // Lắng nghe lại sau khi nói xong, chờ 4 giây
+                                    resumeListeningRunnable = () -> {
+                                        speechRecognizerManager.setAutoRestart(false); // Không auto restart
+                                        speechRecognizerManager.startListening();
+                                    };
+                                    voiceHandler.postDelayed(resumeListeningRunnable, 4000);
+
+                                } else if (waitingForCommand) {
+                                    waitingForCommand = false;
+
+                                    // Gửi dữ liệu qua BLE
+                                    if (bleManager != null && bleManager.isConnected()) {
+                                        boolean ok = bleManager.sendData(text);
+                                        showCustomToast(ok ? "Đã gửi: " + text : "Lỗi khi gửi");
+                                    } else {
+                                        showCustomToast("Chưa kết nối Bluetooth");
+                                    }
+
+                                    // Tiếp tục lắng nghe sau 1.5s
+                                    voiceHandler.postDelayed(() -> {
+                                        speechRecognizerManager.setAutoRestart(true);
+                                        speechRecognizerManager.startListening();
+                                    }, 1500);
+                                }
+                            }
+
+                            @Override
+                            public void onError(String message) {
+                                showCustomToast(message);
+
+                                if (!waitingForCommand) {
+                                    speechRecognizerManager.setAutoRestart(true);
+                                }
+
+                                // Tự động quay lại lắng nghe nếu không đang chờ
+                                voiceHandler.postDelayed(() -> {
+                                    if (!waitingForCommand) {
+                                        speechRecognizerManager.startListening();
+                                    }
+                                }, 1500);
+                            }
+                        });
+                        speechRecognizerManager.startListening();
+                    }
+
+                });
             }
 
             @Override
@@ -166,6 +244,7 @@ public class FloatingBubbleService extends Service {
 
         return START_STICKY;
     }
+
     @SuppressLint("MissingPermission")
     private void requestLocationUpdates() {
         LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
@@ -259,15 +338,9 @@ public class FloatingBubbleService extends Service {
         });
 
         btn_settings.setOnClickListener(v -> {
-            settingExecutor.execute(() -> {
-//                TODO: Xử lí nặng
-//                android.util.Log.d("Setting", "Thực hiện hành động Settings");
 
-                new Handler(Looper.getMainLooper()).post(() ->
-                        showCustomToast("Settings action")
-                );
-            });
         });
+
         btn_bluetooth.setOnLongClickListener(v -> {
             showInputDialog();  // gọi hàm nhập tin nhắn
             return true;
@@ -428,6 +501,14 @@ public class FloatingBubbleService extends Service {
             unregisterReceiver(screenReceiver);
         }
         if (bleManager != null) bleManager.disconnect();
+        if (speechRecognizerManager != null) {
+            speechRecognizerManager.destroy();
+            speechRecognizerManager = null;
+        }
+        if (textSpeaker != null) {
+            textSpeaker.shutdown();
+            textSpeaker = null;
+        }
     }
 
     @Override

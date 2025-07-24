@@ -16,6 +16,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_CODE_OVERLAY = 1001;
     private static final int REQUEST_CODE_LOCATION = 1003;
     private static final int REQUEST_CODE_BLUETOOTH = 1004;
+    private static final int REQUEST_CODE_AUDIO = 1005;
     public static MainActivity instance;
 
     @Override
@@ -51,6 +52,11 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_CODE_AUDIO);
+            return;
+        }
+
         startService(new Intent(this, FloatingBubbleService.class));
     }
 
@@ -77,6 +83,13 @@ public class MainActivity extends AppCompatActivity {
             }
             if (allGranted) {
                 checkPermissionsAndStartService();
+            }
+        }
+        if (requestCode == REQUEST_CODE_AUDIO) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                checkPermissionsAndStartService();
+            } else {
+                // Người dùng từ chối, có thể hiển thị thông báo hoặc yêu cầu lại
             }
         }
     }
