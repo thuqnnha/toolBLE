@@ -65,6 +65,8 @@ public class FloatingBubbleService extends Service {
     private SpeechRecognizerManager speechRecognizerManager;
     private TextSpeaker textSpeaker;
     private boolean waitingForCommand = false;
+    private boolean expectingTrigger = true;
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -155,6 +157,9 @@ public class FloatingBubbleService extends Service {
     }
     private Handler voiceHandler = new Handler(Looper.getMainLooper());
     private Runnable resumeListeningRunnable;
+
+    private Handler commandTimeoutHandler = new Handler(Looper.getMainLooper());
+    private Runnable commandTimeoutRunnable;
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         bleManager = new BleManager(this);
@@ -169,26 +174,37 @@ public class FloatingBubbleService extends Service {
                             @Override
                             public void onResult(String text) {
                                 showCustomToast("Bạn nói: " + text);
+                                String lowerText = text.toLowerCase();
 
-                                if (text.toLowerCase().contains("ê cu") && !waitingForCommand) {
+                                if (expectingTrigger && lowerText.contains("ê cu")) {
+                                    expectingTrigger = false;
                                     waitingForCommand = true;
 
-                                    speechRecognizerManager.setAutoRestart(false); // Tạm thời không restart
+                                    // Tắt tự động restart để điều khiển thủ công
+                                    speechRecognizerManager.setAutoRestart(false);
                                     speechRecognizerManager.stopListening();
 
-                                    textSpeaker.speak("Anh Lâm đẹp zai cần gửi gì nữa");
-
-                                    // Lắng nghe lại sau khi nói xong, chờ 4 giây
-                                    resumeListeningRunnable = () -> {
-                                        speechRecognizerManager.setAutoRestart(false); // Không auto restart
+                                    textSpeaker.speak("Anh Lâm đẹp zai cần gửi gì nữa", () -> {
+                                        speechRecognizerManager.setAutoRestart(false);
                                         speechRecognizerManager.startListening();
-                                    };
-                                    voiceHandler.postDelayed(resumeListeningRunnable, 4000);
+
+                                        commandTimeoutRunnable = () -> {
+                                            if (waitingForCommand) {
+                                                waitingForCommand = false;
+                                                expectingTrigger = true;
+                                                showCustomToast("Tôi không nghe được bạn nói gì hihi");
+                                                speechRecognizerManager.setAutoRestart(true);
+                                                speechRecognizerManager.startListening();
+                                            }
+                                        };
+                                        commandTimeoutHandler.removeCallbacksAndMessages(null);
+                                        commandTimeoutHandler.postDelayed(commandTimeoutRunnable, 10000);
+                                    });
 
                                 } else if (waitingForCommand) {
                                     waitingForCommand = false;
+                                    commandTimeoutHandler.removeCallbacksAndMessages(null);
 
-                                    // Gửi dữ liệu qua BLE
                                     if (bleManager != null && bleManager.isConnected()) {
                                         boolean ok = bleManager.sendData(text);
                                         showCustomToast(ok ? "Đã gửi: " + text : "Lỗi khi gửi");
@@ -196,35 +212,45 @@ public class FloatingBubbleService extends Service {
                                         showCustomToast("Chưa kết nối Bluetooth");
                                     }
 
-                                    // Tiếp tục lắng nghe sau 1.5s
-                                    voiceHandler.postDelayed(() -> {
-                                        speechRecognizerManager.setAutoRestart(true);
-                                        speechRecognizerManager.startListening();
-                                    }, 1500);
+                                    // Quay về trạng thái chờ "ê cu"
+                                    expectingTrigger = true;
+                                    speechRecognizerManager.setAutoRestart(true);
+                                    voiceHandler.postDelayed(() -> speechRecognizerManager.startListening(), 2000);
                                 }
                             }
 
                             @Override
                             public void onError(String message) {
-                                showCustomToast(message);
+                                commandTimeoutHandler.removeCallbacksAndMessages(null);
 
-                                if (!waitingForCommand) {
-                                    speechRecognizerManager.setAutoRestart(true);
-                                }
+                                if (waitingForCommand) {
+                                    waitingForCommand = false;
+                                    expectingTrigger = true;
 
-                                // Tự động quay lại lắng nghe nếu không đang chờ
-                                voiceHandler.postDelayed(() -> {
-                                    if (!waitingForCommand) {
-                                        speechRecognizerManager.startListening();
+                                    if (message.contains("Không nghe thấy bạn nói") || message.contains("timeout_empty")) {
+                                        showCustomToast("Tôi không nghe được bạn nói gì hihi");
                                     }
-                                }, 1500);
+
+                                    speechRecognizerManager.setAutoRestart(true);
+                                    voiceHandler.postDelayed(() -> speechRecognizerManager.startListening(), 1500);
+
+                                } else {
+                                    // Không phải đang đợi lệnh, chỉ restart lại
+                                    speechRecognizerManager.setAutoRestart(true);
+                                    voiceHandler.postDelayed(() -> {
+                                        if (!waitingForCommand) {
+                                            speechRecognizerManager.startListening();
+                                        }
+                                    }, 1500);
+                                }
                             }
                         });
+
                         speechRecognizerManager.startListening();
                     }
-
                 });
             }
+
 
             @Override
             public void onDisconnected() {

@@ -59,8 +59,16 @@ public class SpeechRecognizerManager {
             public void onError(int error) {
                 isListening = false;
                 String message = getErrorText(error);
-                listener.onError("Lỗi nhận diện giọng nói: " + message);
-                restartListeningWithDelay();
+                speechRecognizer.cancel();
+
+                if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                    // Truyền thông điệp đặc biệt cho biết đây là timeout
+                    new Handler(Looper.getMainLooper()).post(() ->
+                            listener.onError("timeout_empty")
+                    );
+                } else {
+                    listener.onError("Lỗi nhận diện giọng nói: " + message);
+                }
             }
 
             @Override
@@ -85,6 +93,7 @@ public class SpeechRecognizerManager {
         if (!isListening) {
             isListening = true;
             try {
+                speechRecognizer.cancel();
                 speechRecognizer.startListening(recognizerIntent);
             } catch (Exception e) {
                 isListening = false;
@@ -129,13 +138,12 @@ public class SpeechRecognizerManager {
             case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:
                 return "Timeout mạng";
             case SpeechRecognizer.ERROR_NO_MATCH:
-                return "Không nhận được kết quả";
+            case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
+                return "Không nghe thấy bạn nói";
             case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:
                 return "Bận";
             case SpeechRecognizer.ERROR_SERVER:
                 return "Server lỗi";
-            case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
-                return "Không nghe thấy bạn nói";
             default:
                 return "Không rõ lỗi";
         }
