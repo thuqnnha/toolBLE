@@ -15,10 +15,9 @@ import java.util.List;
 public class SpeechRecognizerManager {
     private final SpeechRecognizer speechRecognizer;
     private final Intent recognizerIntent;
-    private boolean isListening = false;
-    private boolean autoRestart = true;
     private final Context context;
     private final OnSpeechResultListener listener;
+    private boolean isListening = false;
 
     public interface OnSpeechResultListener {
         void onResult(String text);
@@ -29,45 +28,26 @@ public class SpeechRecognizerManager {
         this.context = context;
         this.listener = listener;
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context);
+
         recognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "vi-VN");
 
         speechRecognizer.setRecognitionListener(new RecognitionListener() {
-            @Override
-            public void onReadyForSpeech(Bundle params) {
-                Log.d("Speech", "Ready for speech");
-            }
-
-            @Override
-            public void onBeginningOfSpeech() {
-                Log.d("Speech", "Speech started");
-            }
-
-            @Override
-            public void onRmsChanged(float rmsdB) {}
-
-            @Override
-            public void onBufferReceived(byte[] buffer) {}
-
-            @Override
-            public void onEndOfSpeech() {
-                Log.d("Speech", "Speech ended");
-            }
+            @Override public void onReadyForSpeech(Bundle params) {}
+            @Override public void onBeginningOfSpeech() {}
+            @Override public void onRmsChanged(float rmsdB) {}
+            @Override public void onBufferReceived(byte[] buffer) {}
+            @Override public void onEndOfSpeech() {}
 
             @Override
             public void onError(int error) {
                 isListening = false;
                 String message = getErrorText(error);
-                speechRecognizer.cancel();
-
                 if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
-                    // Truyền thông điệp đặc biệt cho biết đây là timeout
-                    new Handler(Looper.getMainLooper()).post(() ->
-                            listener.onError("timeout_empty")
-                    );
+                    listener.onError("timeout_empty");
                 } else {
-                    listener.onError("Lỗi nhận diện giọng nói: " + message);
+                    listener.onError(message);
                 }
             }
 
@@ -77,28 +57,20 @@ public class SpeechRecognizerManager {
                 List<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                 if (matches != null && !matches.isEmpty()) {
                     listener.onResult(matches.get(0));
+                } else {
+                    listener.onError("timeout_empty");
                 }
-                restartListeningWithDelay();
             }
 
-            @Override
-            public void onPartialResults(Bundle partialResults) {}
-
-            @Override
-            public void onEvent(int eventType, Bundle params) {}
+            @Override public void onPartialResults(Bundle partialResults) {}
+            @Override public void onEvent(int eventType, Bundle params) {}
         });
     }
 
     public void startListening() {
         if (!isListening) {
             isListening = true;
-            try {
-                speechRecognizer.cancel();
-                speechRecognizer.startListening(recognizerIntent);
-            } catch (Exception e) {
-                isListening = false;
-                listener.onError("Không thể bắt đầu lắng nghe: " + e.getMessage());
-            }
+            speechRecognizer.startListening(recognizerIntent);
         }
     }
 
@@ -109,43 +81,23 @@ public class SpeechRecognizerManager {
         }
     }
 
-    private void restartListeningWithDelay() {
-        if (!autoRestart) return;
-        new Handler(Looper.getMainLooper()).postDelayed(this::startListening, 1500);
-    }
-
-    public void setAutoRestart(boolean enabled) {
-        this.autoRestart = enabled;
-    }
-
     public void destroy() {
         stopListening();
-        if (speechRecognizer != null) {
-            speechRecognizer.destroy();
-        }
+        speechRecognizer.destroy();
     }
 
     private String getErrorText(int errorCode) {
         switch (errorCode) {
-            case SpeechRecognizer.ERROR_AUDIO:
-                return "Lỗi âm thanh";
-            case SpeechRecognizer.ERROR_CLIENT:
-                return "Client lỗi";
-            case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
-                return "Không có quyền";
-            case SpeechRecognizer.ERROR_NETWORK:
-                return "Lỗi mạng";
-            case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:
-                return "Timeout mạng";
+            case SpeechRecognizer.ERROR_AUDIO: return "Lỗi âm thanh";
+            case SpeechRecognizer.ERROR_CLIENT: return "Lỗi client";
+            case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS: return "Không có quyền";
+            case SpeechRecognizer.ERROR_NETWORK: return "Lỗi mạng";
+            case SpeechRecognizer.ERROR_NETWORK_TIMEOUT: return "Timeout mạng";
             case SpeechRecognizer.ERROR_NO_MATCH:
-            case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
-                return "Không nghe thấy bạn nói";
-            case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:
-                return "Bận";
-            case SpeechRecognizer.ERROR_SERVER:
-                return "Server lỗi";
-            default:
-                return "Không rõ lỗi";
+            case SpeechRecognizer.ERROR_SPEECH_TIMEOUT: return "timeout_empty";
+            case SpeechRecognizer.ERROR_RECOGNIZER_BUSY: return "Bận";
+            case SpeechRecognizer.ERROR_SERVER: return "Lỗi server";
+            default: return "Lỗi không xác định";
         }
     }
 }
