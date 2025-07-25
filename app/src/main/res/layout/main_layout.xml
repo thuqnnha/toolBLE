@@ -67,7 +67,7 @@
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:background="@drawable/ripple_white"
-                android:src="@drawable/ic_bluetooth"
+                android:src="@drawable/ic_4"
                 android:contentDescription="Cài đặt"
                 android:layout_marginBottom="8dp"
                 app:tint="#FFFFFF" />

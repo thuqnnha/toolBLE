@@ -77,10 +77,30 @@ public class FloatingBubbleService extends Service {
     private String msg5 = "default5";
     private SpeechRecognizerManager speechRecognizerManager;
     private TextSpeaker textSpeaker;
+    private boolean expectingTrigger = true;
+    private boolean waitingForCommand = false;
+
+    private final Handler commandTimeoutHandler = new Handler(Looper.getMainLooper());
+    private Runnable commandTimeoutRunnable;
 
     @Override
     public void onCreate() {
         super.onCreate();
+        createNotificationForegroundService();
+        acquireWakeLock();
+
+        registerScreenReceiver();
+
+        setupExitView();
+
+        setupBubbleView();
+
+        loadPreferences();
+
+        //init tts
+        textSpeaker = new TextSpeaker(getApplicationContext());
+    }
+    private void createNotificationForegroundService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel("tool_driver_channel",
                     "ToolDriver", NotificationManager.IMPORTANCE_LOW);
@@ -94,7 +114,8 @@ public class FloatingBubbleService extends Service {
 
             startForeground(1, notification);
         }
-
+    }
+    private void acquireWakeLock() {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         //giữ màn hình sáng
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
@@ -102,8 +123,8 @@ public class FloatingBubbleService extends Service {
         if (wakeLock != null && !wakeLock.isHeld()) {
             wakeLock.acquire();
         }
-        //
-        // Đăng ký receiver trong Service để theo dõi khi màn hình tắt
+    }
+    private void registerScreenReceiver() {
         screenReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
@@ -115,8 +136,8 @@ public class FloatingBubbleService extends Service {
 
         IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_OFF);
         registerReceiver(screenReceiver, filter);
-
-        //exit
+    }
+    private void setupExitView() {
         exitView = LayoutInflater.from(this).inflate(R.layout.exit_layout, null);
 
         exitParams = new WindowManager.LayoutParams(
@@ -133,8 +154,8 @@ public class FloatingBubbleService extends Service {
 
         windowManager.addView(exitView, exitParams);
         exitView.setVisibility(View.GONE); // ban đầu ẩn
-        //
-
+    }
+    private void setupBubbleView() {
         bubbleView = LayoutInflater.from(this).inflate(R.layout.main_layout, null);
 
         int layoutFlag = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
@@ -159,23 +180,17 @@ public class FloatingBubbleService extends Service {
         setupDrag(bubbleView, params);
         setupButtons();
         requestLocationUpdates();
-
+    }
+    private void loadPreferences() {
         sharedPreferences = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
         msg1 = sharedPreferences.getString(KEY_MSG1, "Hello");
         msg2 = sharedPreferences.getString(KEY_MSG2, "Button 2");
         msg3 = sharedPreferences.getString(KEY_MSG3, "Button 3");
         msg4 = sharedPreferences.getString(KEY_MSG4, "Button 4");
         msg5 = sharedPreferences.getString(KEY_MSG5, "Button 5");
-
-        //
-        textSpeaker = new TextSpeaker(getApplicationContext());
     }
-    private boolean expectingTrigger = true;
-    private boolean waitingForCommand = false;
 
-    private final Handler commandTimeoutHandler = new Handler(Looper.getMainLooper());
-    private Runnable commandTimeoutRunnable;
-
+//-----------------------------------Logic xu li voice-------------------------------------
     private void startCommandTimeout() {
         cancelCommandTimeout();
         commandTimeoutRunnable = () -> {
@@ -188,17 +203,14 @@ public class FloatingBubbleService extends Service {
         };
         commandTimeoutHandler.postDelayed(commandTimeoutRunnable, 7000);
     }
-
     private void cancelCommandTimeout() {
         commandTimeoutHandler.removeCallbacksAndMessages(null);
     }
-
     private void resetToWakeWordMode() {
         expectingTrigger = true;
         waitingForCommand = false;
         speechRecognizerManager.startListening();
     }
-
     private void restartListeningWithDelay() {
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             if (!waitingForCommand && expectingTrigger) {
@@ -206,7 +218,6 @@ public class FloatingBubbleService extends Service {
             }
         }, 1000);
     }
-
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         bleManager = new BleManager(this);
@@ -356,7 +367,7 @@ public class FloatingBubbleService extends Service {
 
                 String finalSpeed = (speedLimit != null && !"NoData".equals(speedLimit)) ? speedLimit : "NoData";
                 new Handler(Looper.getMainLooper()).post(() -> {
-                    txtSpeed.setText(finalSpeed);  // Chỉ hiển thị "50 km/h" hoặc "NoData"
+                    txtSpeed.setText(finalSpeed);
                 });
 
             } catch (Exception e) {
@@ -367,7 +378,6 @@ public class FloatingBubbleService extends Service {
             }
         }).start();
     }
-
 
     private void setupButtons() {
         ImageButton btn_bluetooth = bubbleView.findViewById(R.id.btn_bluetooth);
@@ -438,7 +448,7 @@ public class FloatingBubbleService extends Service {
         });
 
         btn_5.setOnClickListener(v -> {
-            btn2Executor.execute(() -> {
+            btn5Executor.execute(() -> {
                 if (bleManager != null && bleManager.isConnected()) {
                     boolean ok = bleManager.sendData(msg5);
                     new Handler(Looper.getMainLooper()).post(() ->
@@ -517,14 +527,18 @@ public class FloatingBubbleService extends Service {
                                 Math.pow(bubbleCenterX - exitCenterX, 2)
                                         + Math.pow(bubbleCenterY - exitCenterY, 2));
 
-                        isInsideExitZone = distance < 100; // khoảng cách nhỏ thì coi là nằm trong vùng thoát
+                        isInsideExitZone = distance < 100;
 
                         return true;
 
                     case MotionEvent.ACTION_UP:
-                        exitView.setVisibility(View.GONE); // ẩn dấu X sau khi nhả tay
+                        exitView.setVisibility(View.GONE);
                         if (isInsideExitZone) {
-                            stopSelf(); // dừng Service -> thoát bong bóng
+                            stopSelf(); // Dừng Service
+
+                            // Tắt toàn bộ app
+                            android.os.Process.killProcess(android.os.Process.myPid());
+                            System.exit(0);
                         }
                         return true;
                 }
