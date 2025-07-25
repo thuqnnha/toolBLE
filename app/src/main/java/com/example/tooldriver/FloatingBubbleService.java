@@ -42,6 +42,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -95,6 +96,7 @@ public class FloatingBubbleService extends Service {
 
         setupBubbleView();
 
+        requestLocationUpdates();
         loadPreferences();
 
         //init tts
@@ -179,7 +181,6 @@ public class FloatingBubbleService extends Service {
 
         setupDrag(bubbleView, params);
         setupButtons();
-        requestLocationUpdates();
     }
     private void loadPreferences() {
         sharedPreferences = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
@@ -306,7 +307,6 @@ public class FloatingBubbleService extends Service {
         return START_STICKY;
     }
 
-
     @SuppressLint("MissingPermission")
     private void requestLocationUpdates() {
         LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
@@ -326,14 +326,15 @@ public class FloatingBubbleService extends Service {
 
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000, 10, locationListener);
     }
+
+    private String lastKnownSpeedLimit = "1 km/h"; // Mặc định ban đầu
+
     private void fetchSpeedLimitFromOverpass(double lat, double lon) {
         new Thread(() -> {
             try {
                 String urlStr = "https://overpass-api.de/api/interpreter?data=[out:json];"
-                        + "way(around:100," + lat + "," + lon + ")[\"highway\"][\"maxspeed\"];"
+                        + "way(around:200," + lat + "," + lon + ")[\"highway\"][\"maxspeed\"];"
                         + "out;";
-
-                // Log URL
                 android.util.Log.d("SpeedLimit", "Overpass URL: " + urlStr);
 
                 URL url = new URL(urlStr);
@@ -350,7 +351,9 @@ public class FloatingBubbleService extends Service {
                 in.close();
 
                 JSONObject json = new JSONObject(result.toString());
-                String speedLimit = "NoData";
+                android.util.Log.d("SpeedLimit", "Overpass raw result: " + json);
+
+                String speedLimit = "1 km/h";
 
                 if (json.has("elements") && json.getJSONArray("elements").length() > 0) {
                     JSONObject firstElement = json.getJSONArray("elements").getJSONObject(0);
@@ -358,14 +361,24 @@ public class FloatingBubbleService extends Service {
                         JSONObject tags = firstElement.getJSONObject("tags");
                         if (tags.has("maxspeed")) {
                             speedLimit = tags.getString("maxspeed") + " km/h";
+                            lastKnownSpeedLimit = speedLimit;
+                            android.util.Log.d("SpeedLimit", "Maxspeed found: " + speedLimit);
+                        } else {
+                            android.util.Log.d("SpeedLimit", "Không có tag maxspeed trong tags");
                         }
+                    } else {
+                        android.util.Log.d("SpeedLimit", "Không có tags trong element");
                     }
+                } else {
+                    android.util.Log.d("SpeedLimit", "Không có phần tử nào trong JSON elements");
                 }
 
-                // Log kết quả
-                android.util.Log.d("SpeedLimit", "Speed limit found: " + speedLimit);
+                if ("1 km/h".equals(speedLimit)) {
+                    speedLimit = lastKnownSpeedLimit;
+                    android.util.Log.d("SpeedLimit", "Dùng lại maxspeed cũ: " + speedLimit);
+                }
 
-                String finalSpeed = (speedLimit != null && !"NoData".equals(speedLimit)) ? speedLimit : "NoData";
+                String finalSpeed = speedLimit;
                 new Handler(Looper.getMainLooper()).post(() -> {
                     txtSpeed.setText(finalSpeed);
                 });
@@ -373,7 +386,7 @@ public class FloatingBubbleService extends Service {
             } catch (Exception e) {
                 android.util.Log.e("SpeedLimit", "Lỗi lấy tốc độ giới hạn", e);
                 new Handler(Looper.getMainLooper()).post(() -> {
-                    txtSpeed.setText("NoData");
+                    txtSpeed.setText(lastKnownSpeedLimit);
                 });
             }
         }).start();
