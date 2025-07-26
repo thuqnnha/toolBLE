@@ -1,5 +1,6 @@
 package com.example.tooldriver;
 
+import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -52,7 +53,7 @@ public class BleManager {
             Log.e(TAG, "BluetoothManager is null");
         }
     }
-
+    @SuppressLint("MissingPermission")
     public void startScan() {
         if (bluetoothLeScanner != null) {
             Log.d(TAG, "Start scanning...");
@@ -61,14 +62,14 @@ public class BleManager {
             Log.e(TAG, "bluetoothLeScanner is null");
         }
     }
-
+    @SuppressLint("MissingPermission")
     public void stopScan() {
         if (bluetoothLeScanner != null) {
             bluetoothLeScanner.stopScan(scanCallback);
             Log.d(TAG, "Stop scanning...");
         }
     }
-
+    @SuppressLint("MissingPermission")
     private final ScanCallback scanCallback = new ScanCallback() {
         @Override
         public void onScanResult(int callbackType, ScanResult result) {
@@ -81,13 +82,14 @@ public class BleManager {
             }
         }
     };
-
+    @SuppressLint("MissingPermission")
     private void connectToDevice(BluetoothDevice device) {
         bluetoothGatt = device.connectGatt(context, false, gattCallback);
         Log.d(TAG, "Connecting to " + device.getAddress());
     }
 
     private final BluetoothGattCallback gattCallback = new BluetoothGattCallback() {
+        @SuppressLint("MissingPermission")
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             Log.d(TAG, "onConnectionStateChange: status=" + status + ", newState=" + newState);
@@ -128,7 +130,7 @@ public class BleManager {
             }
         }
     };
-
+    @SuppressLint("MissingPermission")
     public boolean sendData(String data) {
         if (writeCharacteristic != null && bluetoothGatt != null) {
             writeCharacteristic.setValue(data.getBytes());
@@ -144,7 +146,7 @@ public class BleManager {
     public boolean isConnected() {
         return bluetoothGatt != null && writeCharacteristic != null;
     }
-
+    @SuppressLint("MissingPermission")
     public void disconnect() {
         if (bluetoothGatt != null) {
             bluetoothGatt.disconnect();
