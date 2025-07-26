@@ -38,7 +38,6 @@
                 android:layout_height="48dp"
                 android:background="@drawable/ripple_white"
                 android:src="@drawable/ic_1"
-                android:contentDescription="Bluetooth"
                 android:layout_marginBottom="8dp"
                 app:tint="#FFFFFF" />
 
@@ -48,7 +47,6 @@
                 android:layout_height="48dp"
                 android:background="@drawable/ripple_white"
                 android:src="@drawable/ic_2"
-                android:contentDescription="Cài đặt"
                 android:layout_marginBottom="8dp"
                 app:tint="#FFFFFF" />
 
@@ -58,7 +56,6 @@
                 android:layout_height="48dp"
                 android:background="@drawable/ripple_white"
                 android:src="@drawable/ic_3"
-                android:contentDescription="Cài đặt"
                 android:layout_marginBottom="8dp"
                 app:tint="#FFFFFF" />
 
@@ -68,7 +65,6 @@
                 android:layout_height="48dp"
                 android:background="@drawable/ripple_white"
                 android:src="@drawable/ic_4"
-                android:contentDescription="Cài đặt"
                 android:layout_marginBottom="8dp"
                 app:tint="#FFFFFF" />
 
@@ -78,7 +74,15 @@
                 android:layout_height="48dp"
                 android:background="@drawable/ripple_white"
                 android:src="@drawable/ic_5"
-                android:contentDescription="Cài đặt"
+                android:layout_marginBottom="8dp"
+                app:tint="#FFFFFF" />
+
+            <ImageButton
+                android:id="@+id/btn_voice"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/ripple_white"
+                android:src="@drawable/ic_mic"
                 android:layout_marginBottom="8dp"
                 app:tint="#FFFFFF" />
 
