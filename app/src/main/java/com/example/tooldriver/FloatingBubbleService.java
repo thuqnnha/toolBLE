@@ -2,6 +2,7 @@ package com.example.tooldriver;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -12,6 +13,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.location.Location;
 import android.location.LocationListener;
@@ -28,8 +30,12 @@ import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.util.Log;
 import android.view.*;
+import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -77,12 +83,28 @@ public class FloatingBubbleService extends Service {
     private String msg3 = "default3";
     private String msg4 = "default4";
     private String msg5 = "default5";
+    private static final String KEY_LABEL1 = "label1";
+    private static final String KEY_LABEL2 = "label2";
+    private static final String KEY_LABEL3 = "label3";
+    private static final String KEY_LABEL4 = "label4";
+    private static final String KEY_LABEL5 = "label5";
+
+    private String label1 = "Mặc định 1";
+    private String label2 = "Mặc định 2";
+    private String label3 = "Mặc định 3";
+    private String label4 = "Mặc định 4";
+    private String label5 = "Mặc định 5";
     private SpeechRecognizerManager speechRecognizerManager;
     private TextSpeaker textSpeaker;
     private final Handler longPressHandler = new Handler(Looper.getMainLooper());
     private final Handler tapTimeoutHandler = new Handler(Looper.getMainLooper());
     private boolean isLongPress = false;
-
+    private Button btn_bluetooth;
+    private Button btn_2;
+    private Button btn_3;
+    private Button btn_4;
+    private Button btn_5;
+    private boolean wasInsideExitZone = false;
 
     @Override
     public void onCreate() {
@@ -168,8 +190,9 @@ public class FloatingBubbleService extends Service {
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 layoutFlag,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                PixelFormat.TRANSLUCENT);
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+        PixelFormat.TRANSLUCENT);
 
         params.gravity = Gravity.TOP | Gravity.START;
         params.x = 100;
@@ -189,6 +212,18 @@ public class FloatingBubbleService extends Service {
         msg3 = sharedPreferences.getString(KEY_MSG3, "Button 3");
         msg4 = sharedPreferences.getString(KEY_MSG4, "Button 4");
         msg5 = sharedPreferences.getString(KEY_MSG5, "Button 5");
+
+        label1 = sharedPreferences.getString(KEY_LABEL1, "Mặc định 1");
+        label2 = sharedPreferences.getString(KEY_LABEL2, "Mặc định 2");
+        label3 = sharedPreferences.getString(KEY_LABEL3, "Mặc định 3");
+        label4 = sharedPreferences.getString(KEY_LABEL4, "Mặc định 4");
+        label5 = sharedPreferences.getString(KEY_LABEL5, "Mặc định 5");
+
+        btn_bluetooth.setText(label1);
+        btn_2.setText(label2);
+        btn_3.setText(label3);
+        btn_4.setText(label4);
+        btn_5.setText(label5);
     }
 
     @Override
@@ -344,11 +379,11 @@ public class FloatingBubbleService extends Service {
 
     @SuppressLint("ClickableViewAccessibility")
     private void setupButtons() {
-        ImageButton btn_bluetooth = bubbleView.findViewById(R.id.btn_bluetooth);
-        ImageButton btn_2 = bubbleView.findViewById(R.id.btn_2);
-        ImageButton btn_3 = bubbleView.findViewById(R.id.btn_3);
-        ImageButton btn_4 = bubbleView.findViewById(R.id.btn_4);
-        ImageButton btn_5 = bubbleView.findViewById(R.id.btn_5);
+        btn_bluetooth = bubbleView.findViewById(R.id.btn_bluetooth);
+        btn_2 = bubbleView.findViewById(R.id.btn_2);
+        btn_3 = bubbleView.findViewById(R.id.btn_3);
+        btn_4 = bubbleView.findViewById(R.id.btn_4);
+        btn_5 = bubbleView.findViewById(R.id.btn_5);
         ImageButton btn_voice = bubbleView.findViewById(R.id.btn_voice);
 
         //click
@@ -429,8 +464,12 @@ public class FloatingBubbleService extends Service {
 
         //touchclick
         btn_voice.setOnTouchListener((v, event) -> {
-            if (bleManager == null || !bleManager.isConnected() || speechRecognizerManager == null)
+            if (bleManager == null || !bleManager.isConnected() || speechRecognizerManager == null){
+                new Handler(Looper.getMainLooper()).post(() ->
+                        showCustomToast("Chưa kết nối Bluetooth")
+                );
                 return false;
+            }
 
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -466,29 +505,28 @@ public class FloatingBubbleService extends Service {
             return false;
         });
 
-
         //longclick
         btn_bluetooth.setOnLongClickListener(v -> {
-            showInputDialog(KEY_MSG1, msg1);
+            showInputDialog(KEY_LABEL1, label1, KEY_MSG1, msg1, btn_bluetooth);
             return true;
         });
         btn_2.setOnLongClickListener(v -> {
-            showInputDialog(KEY_MSG2, msg2);
+            showInputDialog(KEY_LABEL2, label2, KEY_MSG2, msg2, btn_2);
             return true;
         });
 
         btn_3.setOnLongClickListener(v -> {
-            showInputDialog(KEY_MSG3, msg3);
+            showInputDialog(KEY_LABEL3, label3, KEY_MSG3, msg3, btn_3);
             return true;
         });
 
         btn_4.setOnLongClickListener(v -> {
-            showInputDialog(KEY_MSG4, msg4);
+            showInputDialog(KEY_LABEL4, label4, KEY_MSG4, msg4, btn_4);
             return true;
         });
 
         btn_5.setOnLongClickListener(v -> {
-            showInputDialog(KEY_MSG5, msg5);
+            showInputDialog(KEY_LABEL5, label5, KEY_MSG5, msg5, btn_5);
             return true;
         });
 
@@ -533,6 +571,17 @@ public class FloatingBubbleService extends Service {
                                         + Math.pow(bubbleCenterY - exitCenterY, 2));
 
                         isInsideExitZone = distance < 100;
+
+                        //animation
+                        FrameLayout exitRoot = exitView.findViewById(R.id.exit_root);
+
+                        if (isInsideExitZone && !wasInsideExitZone) {
+                            exitRoot.setBackgroundResource(R.drawable.exit_background_highlight);
+                            wasInsideExitZone = true;
+                        } else if (!isInsideExitZone && wasInsideExitZone) {
+                            exitRoot.setBackgroundResource(R.drawable.exit_background);
+                            wasInsideExitZone = false;
+                        }
 
                         return true;
 
@@ -611,38 +660,59 @@ public class FloatingBubbleService extends Service {
             }
         }, 2000);
     }
-    private void showInputDialog(String key, String currentValue) {
+    private void showInputDialog(String keyLabel, String currentLabel,
+                                 String keyMsg, String currentMsg,
+                                 Button targetButton) {
         new Handler(Looper.getMainLooper()).post(() -> {
-            android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(getApplicationContext());
-            builder.setTitle("Nhập nội dung gửi");
+            AlertDialog.Builder builder = new AlertDialog.Builder(FloatingBubbleService.this.getBaseContext());
+            builder.setTitle("Nhập nội dung hiển thị và nội dung gửi");
 
-            final android.widget.EditText input = new android.widget.EditText(getApplicationContext());
-            input.setText(currentValue);
-            input.setTextColor(android.graphics.Color.BLACK);
+            LinearLayout layout = new LinearLayout(FloatingBubbleService.this);
+            layout.setOrientation(LinearLayout.VERTICAL);
+            layout.setPadding(50, 40, 50, 10);
 
-            builder.setView(input);
+            EditText inputLabel = new EditText(FloatingBubbleService.this);
+            inputLabel.setHint("Text hiển thị trên nút");
+            inputLabel.setText(currentLabel);
+            layout.addView(inputLabel);
+
+            EditText inputMsg = new EditText(FloatingBubbleService.this);
+            inputMsg.setHint("Nội dung gửi đi (msg)");
+            inputMsg.setText(currentMsg);
+            layout.addView(inputMsg);
+
+            builder.setView(layout);
 
             builder.setPositiveButton("OK", (dialog, which) -> {
-                String newValue = input.getText().toString();
-                sharedPreferences.edit().putString(key, newValue).apply();
-                showCustomToast("Đã lưu: " + newValue);
+                String newLabel = inputLabel.getText().toString();
+                String newMsg = inputMsg.getText().toString();
 
-                // Cập nhật biến tương ứng (nếu muốn dùng lại sau này)
-                switch (key) {
-                    case KEY_MSG1: msg1 = newValue; break;
-                    case KEY_MSG2: msg2 = newValue; break;
-                    case KEY_MSG3: msg3 = newValue; break;
-                    case KEY_MSG4: msg4 = newValue; break;
-                    case KEY_MSG5: msg5 = newValue; break;
+                sharedPreferences.edit()
+                        .putString(keyLabel, newLabel)
+                        .putString(keyMsg, newMsg)
+                        .apply();
+
+                showCustomToast("Đã lưu");
+
+                targetButton.setText(newLabel);
+
+                switch (keyMsg) {
+                    case KEY_MSG1: msg1 = newMsg; label1 = newLabel; break;
+                    case KEY_MSG2: msg2 = newMsg; label2 = newLabel; break;
+                    case KEY_MSG3: msg3 = newMsg; label3 = newLabel; break;
+                    case KEY_MSG4: msg4 = newMsg; label4 = newLabel; break;
+                    case KEY_MSG5: msg5 = newMsg; label5 = newLabel; break;
                 }
             });
 
             builder.setNegativeButton("Hủy", (dialog, which) -> dialog.cancel());
 
-            android.app.AlertDialog dialog = builder.create();
-            dialog.getWindow().setType((Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                    : WindowManager.LayoutParams.TYPE_PHONE);
+            AlertDialog dialog = builder.create();
+
+            if (!(dialog.getWindow() == null)) {
+                dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
+            }
+
             dialog.show();
         });
     }
